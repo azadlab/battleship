@@ -1,0 +1,466 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Collections;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+using System.Runtime.Remoting;
+using System.Runtime.Remoting.Channels;
+using System.Runtime.Remoting.Channels.Tcp;
+using BattleShipControl;
+using Bth.MiddlewareCourse;
+using System.Net;
+using System.Threading;
+using System.Runtime.InteropServices;
+
+namespace BattleShipGame
+{
+    public partial class Form1 : Form
+    {
+        private int hitCount = 0;
+        private int missCount = 0;
+        private int attemptCount = 0;
+        private Thread oThread = null;
+        BattleShipService battle;
+        BattleShipService battleClient;
+        string Opponent = null;
+        Wait w;
+        TcpChannel chnl;
+        TcpChannel ClientChannel;
+        [DllImport("winmm.dll")]
+        public static extern long PlaySound(String lpszName, long hModule, long dwFlags);
+
+        private string m_strCurrentSoundFile = "miss.wav";
+
+        public Form1()
+        {
+            InitializeComponent();
+            dg1.CellClick+=new DataGridViewCellEventHandler(dg1_CellClick);
+            dg2.CellClick += new DataGridViewCellEventHandler(dg2_CellClick);
+            
+        }
+        public void initializeGrids(DataGridView dg)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                dg.Columns.Add("Column-" + i + 1, "Column" + i + 1);
+                dg.Columns[i].Width = 70;
+            }
+            for (int i = 0; i < 10; i++)
+            dg.Rows.Add(10);
+            
+        }
+        
+        public void LoadData(DataGridView dg,BattleShipService bship,bool VisibleAllowed)
+        {
+            string[] row=new string[10];
+            
+            for (int i = 0; i < 10; i++)
+            {
+                for (int j = 0; j < 10; j++)
+                {
+                    //row[j] = bship.battlegrid.battleGrid[i, j].ToString();
+                    if (bship.battlegrid.battleGrid[i, j] == 0)
+                        row[j] = "";
+
+                    else if (VisibleAllowed)
+                        row[j] = "¤";
+
+
+                        dg.Rows[i].Cells[j].Value = row[j];
+                }
+                            
+
+                
+                
+
+                if(VisibleAllowed)
+                    for (int j = 0; j < 10; j++)
+                    {
+                        if (dg.Rows[i].Cells[j].Value == "¤")
+                            dg.Rows[i].Cells[j].Style.BackColor = Color.SeaGreen;
+                        if (bship.battlegrid.battleGrid[i, j] == -1)
+                        {
+                            row[j] = "boom!";
+                            dg.Rows[i].Cells[j].Style.BackColor = Color.Red;
+                        }
+                        if (bship.battlegrid.battleGrid[i, j] == -2)
+                        {
+                            row[j] = "Missed!";
+                            dg.Rows[i].Cells[j].Style.BackColor = Color.Yellow;
+                        }
+                    }
+            }
+
+        }
+        public void dg1_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            DataGridView dgv = (DataGridView)sender;
+            if (dgv.CurrentCell.RowIndex > 9)
+                return;
+            //dgv.CurrentCell.Style.BackColor = Color.Red;
+            //MessageBox.Show("Clicked");
+            attemptCount++;
+            battle.Attempts = attemptCount;
+            
+            // an attempt has been made so check the button
+            string but = (string)dgv.CurrentCell.Value;
+            if (but != "Splosh!")
+            {
+                if (but != "Boom!")
+                {
+                    
+                    try
+                    {
+                        ChangeCellState(dgv); //pressed button   
+
+                    }
+                    catch (Exception ex) { MessageBox.Show("" + ex.Message); }
+                }
+            }
+            
+                battle.NextTurn = Opponent;
+                w.WaitMessage.Text = "Waiting for " + Opponent+ " to play his/her turn";
+                w.ShowDialog();
+                
+            
+        }
+
+        private void ChangeCellState(DataGridView dgv)
+        {
+            int x = dgv.CurrentCell.RowIndex;
+            int y = dgv.CurrentCell.ColumnIndex;
+            //if (playerGrid.fireMissle(x,y))
+            if (battle.Fire(x, y) != FireResult.Miss)
+            {
+                dgv.CurrentCell.Style.BackColor = Color.Red;
+                dgv.CurrentCell.Value = "Boom!";
+                PlaySoundInThread("hit.wav");
+                //grid[i].Enabled = false;
+                dgv.CurrentCell.Tag = 1;
+                battle.battlegrid.battleGrid[dgv.CurrentCell.RowIndex, dgv.CurrentCell.ColumnIndex] = -1;
+                battle.Scores++;
+                hitCount++;
+            }
+            else
+            {
+                dgv.CurrentCell.Style.BackColor = Color.Blue;
+                dgv.CurrentCell.Value = "Splosh!";
+                PlaySoundInThread("miss.wav");
+                //grid[i].Enabled = false;
+                battle.battlegrid.battleGrid[dgv.CurrentCell.RowIndex, dgv.CurrentCell.ColumnIndex] = -2;
+                missCount++;
+                dgv.CurrentCell.Tag = 2;
+            }
+
+            // check to see if the ship is sunk or has already been sunk.
+            // play a ship's bell to indicate sinking.
+            for (int count = 0; count < 5; count++)
+            {
+                //if (playerGrid.getBattleShip(count).isSunk()) 
+                if (battle.GetShip(count).isSunk())
+                {
+                    statusStrip1.Items[count].BackColor = Color.Red;
+                    //if(playerGrid.getBattleShip(count).isAWreck()) 	
+                    if (battle.GetShip(count).isAWreck())
+                    {
+                        PlaySoundInThread("ship.wav");
+                    }
+                }
+            }
+            // Check for winning or for running out of attempts
+            if (CheckForWin(dgv) == true) WonTheGame();
+            if ((CheckForWin(dgv) == false) && CheckForAttempt()) LostTheGame(dgv);
+
+        }
+
+        public void dg2_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            DataGridView dgv = (DataGridView)sender;
+            dgv.CurrentCell.Style.BackColor = Color.Red;
+        }
+
+        private void dg1_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
+        }
+
+        public void PlaySoundInThread(string wavefile)
+        {
+            m_strCurrentSoundFile = wavefile;
+            oThread = new Thread(new ThreadStart(PlayASound));
+            oThread.Start();
+        }
+        public void PlayASound()
+        {
+            if (m_strCurrentSoundFile.Length > 0)
+            {
+                PlaySound(Application.StartupPath + "\\" + m_strCurrentSoundFile, 0, 0);
+            }
+            m_strCurrentSoundFile = "";
+            oThread.Abort();
+        }
+
+        private bool CheckForWin(DataGridView dgv)
+        {
+            /*int count = 0;
+            for (int i = 0; i < 100; i++)
+            {
+                if (dgv.CurrentCell.Style.BackColor == Color.Red)
+                {
+                    count = count + 1;
+                }
+            }*/
+            //if (battle.Scores == 20)
+            if ((battle.Scores == 20&&(battle.Attempts<battleClient.Attempts))||(battle.Scores > battleClient.Scores&&attemptCount==35))
+            {
+              
+                return true;
+            }
+            lblAim.Text = "You have " + (35 - attemptCount) + " goes left - hit " + hitCount + " missed " + missCount;
+            return false;
+        }
+
+        // Check if the user has tried to many times.
+        private bool CheckForAttempt()
+        {
+            if (attemptCount == 35)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        // Lost The Game.....
+        // the user has lost game therefore show all the missed squares and idicate to the user hard luck
+        private void LostTheGame(DataGridView dgv)
+        {
+            showShips(dgv);
+            lblAim.Text = "Hard Luck you lost you tried " + (attemptCount) + " - hit " + hitCount + " missed " + missCount;
+            //for (int i = 0; i < 100; i++)
+            
+            //    dgv.Enabled = false;
+            ClientTimer.Enabled = false;
+            System.Windows.Forms.MessageBox.Show("Hard luck you lost!!!!");
+            PlaySoundInThread("END.wav");
+        }
+
+        private void WonTheGame()
+        {
+            
+            lblAim.Text = "Congratulations - You have hit " + hitCount + " missed " + missCount;
+            System.Windows.Forms.MessageBox.Show("Congratulations!!!!");
+            PlaySoundInThread("tada.wav");
+            ClientTimer.Enabled = false;
+        }
+        private void showShips(DataGridView dgv)
+        {
+
+            for (int i = 0; i < 10; i++)
+            {
+
+                //int x = dgv.CurrentCell.RowIndex;
+                //int y = dgv.CurrentCell.ColumnIndex;
+                for (int j = 0; j < 10;j++ )
+                    if (dgv.Rows[i].Cells[j].Style.BackColor != Color.Red)
+                    {
+                        //if (playerGrid.fireMissle(x,y))
+                        if (battle.Fire(i, j) != FireResult.Miss)
+                        {
+                            dgv.Rows[i].Cells[j].Style.BackColor = Color.Yellow;
+                            dgv.Rows[i].Cells[j].Value = "Missed!";
+                            //dgv.CurrentCell.Enabled = false;
+                        }
+                    }
+            }
+        }
+
+        private void splitContainer1_Panel1_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void StartGameButton_Click(object sender, EventArgs e)
+        {
+            
+            
+            try
+            {
+                    battle = new BattleShipService();
+                    /* string fileName = AppDomain.CurrentDomain.BaseDirectory + "BattleShipGame.exe.config";
+                     //configure remoting
+                     RemotingConfiguration.Configure(fileName);
+                     obj = new BattleShipService();
+                     RemotingServices.Marshal((obj), "BattleShipService");*/
+                    chnl = new TcpChannel(Convert.ToInt32(ServerPort.Text));
+                    
+                    ChannelServices.RegisterChannel(chnl);
+
+                    RemotingConfiguration.RegisterWellKnownServiceType(
+                        typeof(BattleShipService), "BattleShipService", WellKnownObjectMode.Singleton);
+
+                    battle.NextTurn = PName.Text;
+                    //ChannelServices.UnregisterChannel(chnl);
+                    IDictionary prop = new Hashtable();
+                    prop["name"] = "tcp1";
+                    prop["port"] = (Convert.ToInt32(ClientPort.Text)+10).ToString();
+                    ClientChannel = new TcpChannel(prop, null, null);
+                    ChannelServices.RegisterChannel(ClientChannel);
+
+                    //TcpChannel Clientchnl = new TcpChannel(prop,null,null);
+                    //ChannelServices.RegisterChannel(Clientchnl);
+                    battle = (BattleShipService)Activator.GetObject(typeof(BattleShipService),
+                                            "tcp://"+ClientLoc.Text+":" + ServerPort.Text + "/BattleShipService");
+                    battle.Player = PName.Text;
+                    PlayerTimer.Enabled = true;
+                    w = new Wait();
+                    w.ShowDialog();
+                    initializeGrids(dg1);
+                    initializeGrids(dg2);
+                    LoadData(dg1, battle, false);
+                    
+                    //LoadData(dg2, battle, true);
+                    ClientTimer.Enabled = true;
+                    ClientTimer.Interval = 5000;
+                    groupBox1.Enabled = false;
+                }
+                catch (Exception error)
+                {
+
+                    MessageBox.Show("Error Connecting, please check connection information","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
+                    groupBox1.Enabled = true;
+                    try
+                    {
+                        ChannelServices.UnregisterChannel(chnl);
+                        ChannelServices.UnregisterChannel(ClientChannel);
+                    }
+                    catch (Exception ex) { }
+                }
+
+
+            
+
+            
+        }
+        
+        private void ClientTimer_Tick(object sender, EventArgs e)
+        {
+            /*if (oThread == null)
+            {
+                oThread = new Thread(new ThreadStart(CheckClient));
+                oThread.Start();
+            }*/
+
+            try
+            {
+                battleClient = (BattleShipService)Activator.GetObject(typeof(BattleShipService),
+                                        "tcp://" + ClientLoc.Text + ":" + ClientPort.Text + "/BattleShipService");
+
+                if (battleClient != null)
+                    LoadData(dg2, battleClient, true);
+                if (battleClient.Player != null)
+                {
+                    if (battle.NextTurn == Opponent)
+                    {
+                        if (battleClient.NextTurn == PName.Text)
+                        {
+                            if (w.Visible)
+                                w.Hide();
+                            battle.NextTurn = PName.Text;
+                        }
+                       
+                    }
+                    
+                }
+                
+            }
+            catch (Exception error)
+            {
+                //MessageBox.Show("" + error.Message);
+            }
+        }
+        /*public void CheckClient()
+        {
+            try
+            {
+                battleClient = (BattleShipService)Activator.GetObject(typeof(BattleShipService),
+                                        "tcp://" + ClientLoc.Text + ":" + ClientPort.Text + "/BattleShipService");
+
+                if (battleClient != null)
+                    LoadData(dg2, battleClient, true);
+                oThread = null;
+            }
+            catch (Exception error)
+            {
+                //MessageBox.Show("" + error.Message);
+                oThread.Abort();
+                oThread = null;
+            } 
+        }*/
+
+        private void PlayerTimer_Tick(object sender, EventArgs e)
+        {
+            CheckPlayer();  
+        }
+        public void CheckPlayer()
+        {
+            try
+            {
+                battleClient = (BattleShipService)Activator.GetObject(typeof(BattleShipService),
+                                        "tcp://localhost:" + ClientPort.Text + "/BattleShipService");
+
+                if (battleClient.Player != null)
+                {
+                    PlayerTimer.Enabled = false;
+                    Opponent = battleClient.Player;
+                    w.Hide();
+                }
+            }
+            catch (Exception error)
+            {
+                //MessageBox.Show("" + error.Message);
+            } 
+        }
+
+        public bool EndGame()
+        {
+
+            if (MessageBox.Show("Do you really want to end the game!", "End Game", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
+            {
+                ClientTimer.Enabled = false;
+                return true;
+            }
+            return false;
+        }
+
+        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            new About().ShowDialog();
+        }
+
+        private void startNewGameToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            battle.StartNewGame(PName.Text);
+            ClientTimer.Enabled = true;
+        }
+
+        private void endGameToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            EndGame();
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void TurnTimer_Tick(object sender, EventArgs e)
+        {
+            
+        }
+
+    }
+}

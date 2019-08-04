@@ -1,0 +1,161 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+using System.Runtime.Remoting;
+using System.Runtime.Remoting.Channels;
+using System.Runtime.Remoting.Channels.Tcp;
+using BattleShipControl;
+
+namespace BattleShipGame
+{
+    public partial class Form1 : Form
+    {
+        BattleShipService obj;
+        public Form1()
+        {
+            InitializeComponent();
+            dg1.CellClick+=new DataGridViewCellEventHandler(dg1_CellClick);
+            dg2.CellClick += new DataGridViewCellEventHandler(dg2_CellClick);
+            
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            comboBox1.Enabled = false;
+            if (comboBox1.Text == "Client")
+            {
+                TcpChannel chnl = new TcpChannel();
+                ChannelServices.RegisterChannel(chnl);
+
+                obj = (BattleShipService)Activator.GetObject(typeof(BattleShipService),
+                                        "tcp://localhost:1237/BattleShipService");
+                LoadData(dg2);
+            }
+            else if (comboBox1.Text == "Server")
+            {
+                try
+                {
+                   /* string fileName = AppDomain.CurrentDomain.BaseDirectory + "BattleShipGame.exe.config";
+                    //configure remoting
+                    RemotingConfiguration.Configure(fileName);
+                    obj = new BattleShipService();
+                    RemotingServices.Marshal((obj), "BattleShipService");*/
+                    TcpChannel chnl = new TcpChannel(Convert.ToInt32(PortNo.Text));
+                    ChannelServices.RegisterChannel(chnl);
+
+                    RemotingConfiguration.RegisterWellKnownServiceType(
+                        typeof(BattleShipService), "BattleShipService", WellKnownObjectMode.Singleton);
+                    obj = new BattleShipService();
+                    LoadData(dg1);
+                }
+                catch (Exception error)
+                {
+                }
+                
+            }
+
+        }
+        public void LoadData(DataGridView dg)
+        {
+            string[] row=new string[10];
+            
+            for (int i = 0; i < 10; i++)
+            {
+                dg.Columns.Add("Column-" + i + 1, "Column" + i + 1);
+                dg.Columns[i].Width = 50;
+            }
+            for (int i = 0; i < 10; i++)
+            {
+                for (int j = 0; j < 10; j++)
+                    row[j] = obj.battlegrid.battleGrid[i, j].ToString();
+                dg.Rows.Add(row);
+            }
+
+        }
+        public void dg1_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            DataGridView dgv = (DataGridView)sender;
+            dgv.CurrentCell.Style.BackColor = Color.Red;
+            //MessageBox.Show("Clicked");
+            attemptCount++;
+            // an attempt has been made so check the button
+            string but = (string)dgv.CurrentCell.Value;
+            if (but != "Splosh!")
+            {
+                if (but != "Boom!")
+                {
+                    
+                    try
+                    {
+                        ChangeCellState(dgv); //pressed button   
+
+                    }
+                    catch (Exception ex) { MessageBox.Show("" + ex.Message); }
+                }
+            }
+        }
+
+        private void ChangeCellState(DataGridView dgv)
+        {
+
+            int x = i / 10;
+            int y = i - (x * 10);
+
+            //if (playerGrid.fireMissle(x,y))
+            if (battle.Fire(x, y) != FireResult.Miss)
+            {
+                dgv.CurrentCell.Style.BackColor = Color.Red;
+                grid[i].Text = "Boom!";
+                PlaySoundInThread("hit.wav");
+                //grid[i].Enabled = false;
+                dgv.CurrentCell.Tag = 1;
+                hitCount++;
+            }
+            else
+            {
+                dgv.CurrentCell.Style.BackColor = Color.Blue;
+                dgv.CurrentCell.Value = "Splosh!";
+                PlaySoundInThread("miss.wav");
+                //grid[i].Enabled = false;
+                missCount++;
+                dgv.CurrentCell.Tag = 2;
+            }
+
+            // check to see if the ship is sunk or has already been sunk.
+            // play a ship's bell to indicate sinking.
+            for (int count = 0; count < 5; count++)
+            {
+                //if (playerGrid.getBattleShip(count).isSunk()) 
+                if (battle.GetShip(count).isSunk())
+                {
+                    statusStrip1.Items[i].BackColor = Color.Red;
+                    //if(playerGrid.getBattleShip(count).isAWreck()) 	
+                    if (battle.GetShip(count).isAWreck())
+                    {
+                        PlaySoundInThread("ship.wav");
+                    }
+                }
+            }
+            // Check for winning or for running out of attempts
+            if (CheckForWin() == true) WonTheGame();
+            if ((CheckForWin() == false) && (CheckForAttempt() == true)) LostTheGame();
+
+        }
+
+        public void dg2_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            DataGridView dgv = (DataGridView)sender;
+            dgv.CurrentCell.Style.BackColor = Color.Red;
+        }
+
+        private void dg1_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
+        }
+    }
+}

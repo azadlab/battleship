@@ -1,0 +1,5 @@
+E:\Middleware Projects\Exercises\BattleShip\BattleService\obj\Debug\ResolveAssemblyReference.cache
+E:\Middleware Projects\Exercises\BattleShip\BattleService\bin\Debug\BattleService.dll
+E:\Middleware Projects\Exercises\BattleShip\BattleService\bin\Debug\BattleService.pdb
+E:\Middleware Projects\Exercises\BattleShip\BattleService\obj\Debug\BattleService.dll
+E:\Middleware Projects\Exercises\BattleShip\BattleService\obj\Debug\BattleService.pdb

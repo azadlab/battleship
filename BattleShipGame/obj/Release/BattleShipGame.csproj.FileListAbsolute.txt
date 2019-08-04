@@ -1,0 +1,13 @@
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\bin\Release\BattleShipGame.exe.config
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\bin\Release\BattleShipGame.exe
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\bin\Release\BattleShipGame.pdb
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\bin\Release\BattleService.dll
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\bin\Release\BattleService.pdb
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\ResolveAssemblyReference.cache
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.About.resources
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.MainEntry.resources
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.Properties.Resources.resources
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.Wait.resources
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.csproj.GenerateResource.Cache
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.exe
+E:\Middleware Projects\Exercises\BattleShip\BattleShipGame\obj\Release\BattleShipGame.pdb
